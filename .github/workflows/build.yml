@@ -1,4 +1,4 @@
-name: "Crystal-like-Carbon — FULL AUTO 3OS BUILD & RELEASE"
+name: "Crystal-like-Carbon — FULL SAFE 3OS BUILD & RELEASE"
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: "🔧 Build Crystal-like-Carbon (${ { matrix.os } })"
+    name: "Build on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -19,26 +19,30 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
-      - name: 📦 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # -------------------------
-      # OS Dependencies
-      # -------------------------
-      - name: 🛠 Install Dependencies (Linux)
+      # ===========================================
+      # Install dependencies
+      # ===========================================
+
+      # ----- Linux -----
+      - name: Install build deps (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build clang
 
-      - name: 🛠 Install Dependencies (macOS)
+      # ----- macOS -----
+      - name: Install build deps (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           brew update
           brew install cmake ninja llvm
-          echo "export PATH=$(brew --prefix llvm)/bin:$PATH" >> ~/.bashrc
+          echo "export PATH=$(brew --prefix llvm)/bin:$PATH" >> ~/.bash_profile
 
-      - name: 🛠 Install Dependencies (Windows)
+      # ----- Windows -----
+      - name: Install build deps (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
@@ -46,73 +50,82 @@ jobs:
           choco install ninja -y
           choco install llvm -y
 
-      # -------------------------
-      # Configure + Build
-      # -------------------------
-      - name: 🔧 CMake Configure
+      # ===========================================
+      # CMake Configure
+      # ===========================================
+
+      # ----- Linux/macOS -----
+      - name: CMake Configure (Unix)
+        if: runner.os != 'Windows'
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release
 
-      - name: ⚙️ Build
+      # ----- Windows -----
+      - name: CMake Configure (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release
+
+      # ===========================================
+      # Build
+      # ===========================================
+      - name: Build Project
         run: cmake --build build
 
-      # -------------------------
-      # Optional Tests
-      # -------------------------
-      - name: 🧪 Run Tests (if exist)
-        continue-on-error: true
-        run: |
-          ctest --test-dir build || echo "No tests"
-
-      # -------------------------
-      # Upload Artifacts
-      # -------------------------
-      - name: 📦 Upload Build Artifacts
+      # ===========================================
+      # Upload artifacts
+      # ===========================================
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: crystal-${{ matrix.os }}
+          name: build-${{ matrix.os }}
           path: build/
 
-  # ============================================
+
+  # =============================================================
   # RELEASE JOB
-  # ============================================
+  # =============================================================
   release:
-    name: "🚀 Auto Release"
     runs-on: ubuntu-latest
     needs: build
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: 🔢 Generate Tag
-        id: version
+      # Generate timestamp version
+      - name: Generate Tag
+        id: ver
+        run: echo "tag=v$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
+      # Create tag
+      - name: Create Tag
         run: |
-          TAG="v$(date +'%Y%m%d-%H%M%S')"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          git tag ${{ steps.ver.outputs.tag }}
+          git push origin ${{ steps.ver.outputs.tag }}
 
-      - name: 🏷️ Create Tag
-        run: |
-          git tag ${{ steps.version.outputs.tag }}
-          git push origin ${{ steps.version.outputs.tag }}
-
-      - name: 📥 Download All Artifacts
+      # Download artifacts
+      - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
           path: release/
 
-      - name: 📦 Make ZIP Packages
+      # Zip each OS output
+      - name: Make ZIP Packages
         run: |
           cd release
-          zip -r crystal-linux.zip crystal-ubuntu-latest
-          zip -r crystal-macos.zip crystal-macos-latest
-          zip -r crystal-windows.zip crystal-windows-latest
+          zip -r crystal-linux.zip build-ubuntu-latest
+          zip -r crystal-macos.zip build-macos-latest
+          zip -r crystal-windows.zip build-windows-latest
 
-      - name: 🚀 Publish Release
+      # Publish Release
+      - name: Publish Release
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: "Crystal-like-Carbon — ${{ steps.version.outputs.tag }}"
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: "Crystal-like-Carbon — ${{ steps.ver.outputs.tag }}"
           files: release/*.zip
+
