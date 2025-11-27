@@ -1,0 +1,6 @@
+[package]
+name = "crystal_like_carbon"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
