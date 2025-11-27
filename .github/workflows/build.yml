@@ -1,4 +1,4 @@
-name: "Crystal-like-Carbon — AUTO BUILD & RELEASE"
+name: "Carbon-like — Build & Test & Release"
 
 on:
   push:
@@ -10,39 +10,43 @@ permissions:
 
 jobs:
   build:
-    name: "🔧 Build Crystal-like-Carbon"
     runs-on: ubuntu-latest
 
     steps:
       - name: 📦 Checkout
         uses: actions/checkout@v4
 
-      - name: 🦀 Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: 🛠 Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake clang ninja-build
 
-      - name: ⚙️ Cargo Build
-        run: cargo build --release --verbose
+      - name: 🔧 Configure CMake
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++
 
-      - name: 🧪 Cargo Test
-        run: cargo test --all --verbose
+      - name: ⚙️ Build Carbon Project
+        run: cmake --build build --config Release
+
+      - name: 🧪 Run Tests
+        run: ctest --test-dir build --output-on-failure
 
       - name: 📦 Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: crystal-carbon-build
-          path: target/release/*
+          name: carbon-build
+          path: build/
 
   release:
-    name: "🚀 Auto Release"
     runs-on: ubuntu-latest
     needs: build
 
     steps:
-      - name: 📦 Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # timestamp version
-      - name: 🔢 Generate Tag (timestamp)
+      - name: 🔢 Generate Tag
         id: version
         run: |
           TAG="v$(date +'%Y%m%d-%H%M%S')"
@@ -53,22 +57,17 @@ jobs:
           git tag ${{ steps.version.outputs.tag }}
           git push origin ${{ steps.version.outputs.tag }}
 
-      - name: 📥 Download Build Artifacts
+      - name: 📥 Download Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: crystal-carbon-build
+          name: carbon-build
           path: release/
 
-      - name: 🚀 Create Release
+      - name: 🚀 Publish Release
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: "Crystal-like-Carbon — ${{ steps.version.outputs.tag }}"
-          body: |
-            ## Crystal-like-Carbon Auto Release
-            - Meaning-level structure prototype
-            - Auto-built with GitHub Actions
-          files: |
-            release/*
+          name: "Carbon-like — ${{ steps.version.outputs.tag }}"
+          files: release/**
