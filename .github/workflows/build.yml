@@ -1,0 +1,74 @@
+name: "Crystal-like-Carbon — AUTO BUILD & RELEASE"
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: "🔧 Build Crystal-like-Carbon"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📦 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🦀 Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: ⚙️ Cargo Build
+        run: cargo build --release --verbose
+
+      - name: 🧪 Cargo Test
+        run: cargo test --all --verbose
+
+      - name: 📦 Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: crystal-carbon-build
+          path: target/release/*
+
+  release:
+    name: "🚀 Auto Release"
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: 📦 Checkout
+        uses: actions/checkout@v4
+
+      # timestamp version
+      - name: 🔢 Generate Tag (timestamp)
+        id: version
+        run: |
+          TAG="v$(date +'%Y%m%d-%H%M%S')"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: 🏷️ Create Tag
+        run: |
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin ${{ steps.version.outputs.tag }}
+
+      - name: 📥 Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: crystal-carbon-build
+          path: release/
+
+      - name: 🚀 Create Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Crystal-like-Carbon — ${{ steps.version.outputs.tag }}"
+          body: |
+            ## Crystal-like-Carbon Auto Release
+            - Meaning-level structure prototype
+            - Auto-built with GitHub Actions
+          files: |
+            release/*
